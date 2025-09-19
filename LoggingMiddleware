@@ -1,1 +1,56 @@
+const express = require('express');
+const axios = require('axios');
+const bodyParser = require('body-parser');
+
+const app = express();
+app.use(bodyParser.json());
+
+async function Log(stack, level, pkg, message) {
+  try {
+    await axios.post('http://20.244.56.144/evaluation-service/logs', {
+      stack,
+      level,
+      package: pkg,
+      message
+    });
+  } catch (err) {
+    console.warn(`Log API call failed: ${err.message}`);
+  }
+}
+
+
+app.use(async (req, res, next) => {
+  await Log("backend", "info", "middleware", `Incoming ${req.method} ${req.originalUrl}`);
+  if (Object.keys(req.body).length > 0) {
+    await Log("backend", "info", "middleware", `Request Body: ${JSON.stringify(req.body)}`);
+  }
+
+  const originalSend = res.send;
+  res.send = function (body) {
+    Log("backend", "info", "middleware", `Response Status: ${res.statusCode}`);
+    Log("backend", "info", "middleware", `Response Body: ${body}`);
+    return originalSend.call(this, body);
+  };
+
+  next();
+});
+
+
+app.get('/hello', (req, res) => {
+  res.json({ message: 'Hello, World!' });
+});
+
+
+app.get('/error', (req, res) => {
+  try {
+    throw new Error("Something went wrong!");
+  } catch (err) {
+    Log("backend", "error", "handler", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.listen(3000, () => {
+  console.log('Server running on http://localhost:3000');
+});
 
